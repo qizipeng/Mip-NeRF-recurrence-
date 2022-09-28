@@ -9,5 +9,14 @@ x, y = np.meshgrid(
                 indexing = "xy"
             )
 
+print(x.shape, y.shape)
 
-print(np.stack([x,y, np.ones_like(x)]))
+x = [[1,1],
+     [2,2],
+     [3,3]]
+x = np.array(x)
+
+print(x)
+c = np.concatenate([x, x[-2:-1,:]],0)
+print(c)
+print(c.shape)

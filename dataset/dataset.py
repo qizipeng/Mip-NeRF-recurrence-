@@ -1,11 +1,11 @@
 import os
 import json
-import collection
-from torch.util.data import Dataset
+import collections
+from torch.utils.data import Dataset
 import numpy as np
 
 
-Rays = collection.namedtuple(
+Rays = collections.namedtuple(
     'Rays',
     ('origins', 'directions', 'viewdirs', 'radii', 'lossmult', 'near', 'far')
 )
@@ -130,13 +130,46 @@ class Multicam(BaseDataset):
             )
 
         xy = [res2grid(w, d) for w, d in zip(width, height)]
-        pixel_dirs = [np.stack([x,y,np.ones_like(x)], axis = 1) for x,y in xy]
+        pixel_dirs = [np.stack([x,y,np.ones_like(x)], axis = 1) for x,y in xy]  #n个 h w 1
         camera_dirs = [v @ p2c[:3,:3].T for v, p2c in zip(pixel_dirs, pix2cam)]  ## x y 1  pix坐标系->cam坐标系
-        directions = [(v @ c2w[:3,:3].T).copy() for v, c2w in zip(camera_dirs, cam2world)] ##cam坐标系->世界坐标系
+        directions = [(v @ c2w[:3,:3].T).copy() for v, c2w in zip(camera_dirs, cam2world)] ##cam坐标系->世界坐标系 n个相机视角 x y z
         origins = [
             np.broadcast_to(c2w[:3, -1], v.shape).copy()
             for v, c2w in zip(directions, cam2world)
+        ]  ####相机外参的最后一列是相机的世界坐标  广播 将【1，3】->【n，3】 相机的世界坐标
+
+
+        ###做归一化
+        viewdirs = [
+            v/np.linalog.norm(v, axis = -1, keepdims = True) for v in directions
         ]
+
+        def broadcast_scalar_attribute(x):
+            return[
+                np.broadcast_to(x[i], origins[i][...,:1].shape).astype(np.float32)
+                for i in range(len(self.images))
+            ]
+
+        lossmult = broadcast_scalar_attribute(self.meta["lossmult"].copy())
+        near = broadcast_scalar_attribute(self.meta["near"].copy())
+        far = broadcast_scalar_attribute(self.meta["far"].copy())
+
+
+        ##v[:-1 - v[1: 相邻向量在x分量 x y
+        dx = [
+            np.sqrt(np.sum((v[:-1,:,:]-v[1:,:,:])**2,-1)) for v in directions
+        ]
+        dx = [np.concatenate([v, v[-2:-1,:],0]) for v in dx]
+        radii = [v[...,None]*2 / np.sqrt(12) for v in dx]   ###这里是圆的半径吧 在世界坐标系下的
+
+
+
+
+
+
+
+
+
 
 
 
