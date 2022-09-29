@@ -160,7 +160,24 @@ class Multicam(BaseDataset):
             np.sqrt(np.sum((v[:-1,:,:]-v[1:,:,:])**2,-1)) for v in directions
         ]
         dx = [np.concatenate([v, v[-2:-1,:],0]) for v in dx]
-        radii = [v[...,None]*2 / np.sqrt(12) for v in dx]   ###这里是圆的半径吧 在世界坐标系下的
+        radii = [v[...,None]*2 / np.sqrt(12) for v in dx]   ###这里是圆的半径吧 在世界坐标系下的 sqrt(2)*r/sqrt(12)
+
+        self.rays = Rays(
+            origins = origins,
+            directions = directions,
+            viewdirs = viewdirs,
+            radii = radii,
+            lossmult = lossmult,
+            near = near,
+            far = far
+        )
+
+        del origins, directions, viewdirs, radii, lossmult, near, far, xy, pixel_dirs, camera_dirs
+
+
+    
+
+
 
 
 
