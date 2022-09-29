@@ -185,7 +185,7 @@ class MipNeRFSystem(LightningModule):
             1, height, width, coarse_rgb.shape[-1])  # N H W C
         fine_rgb = fine_rgb.reshape(
             1, height, width, fine_rgb.shape[-1])  # N H W C
-        
+
         return coarse_rgb, fine_rgb, val_mask
 
 
