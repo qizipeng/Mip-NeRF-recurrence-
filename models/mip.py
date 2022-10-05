@@ -49,3 +49,55 @@ def sample_along_rays(origins, directions, radii, num_samples, near, far, random
     means, convs = cast_rays(t_samples, origins, directions, radii, ray_shape)
 
     return t_samples, (means,convs)
+
+
+def resample_along_rays(origins, directions, radii, t_samples, weights, randomized, ray_shape, stop_grad,
+                        rasample_padding):
+
+    if stop_grad:
+        with torch.no_grad():
+            weights_pad = torch.cat([weights[...,:1], weights,weights[...,-1:]],dim = -1)
+            weights_max = torch.maximum(weigthts_pad[...,:-1], weights_pad[...,1:])
+            weights_blur = 0.5 * (weights_max[...,:-1] + weights_max[...,1:])
+
+            weights = weights_blur + resample_padding
+
+            new_t_vals = sorted_piecewise_constant_pdf(
+                t_samples,
+                weights,
+                t_samples.shape[-1],
+                randomized,
+            )
+    else:
+        weights_pad = torch.cat([weights[...,:1], weights, weights[...,-1:]], dim = -1)
+        weights_max = torch.maximum(weights_pad[..., :-1], weights_pad[...,1:])
+        weights_blur = 0.5 * (weights_max[..., :-1] + weights_max[..., 1:])
+
+        weights = weights_blur + resample_padding
+
+        new_t_vals = sorted_piecewise_constant_pdf(
+            t_samples,
+            weights,
+            t_samples.shape[-1],
+            randomized,
+        )
+
+    means, convs, = cast_rays(new_t_vals, origins, directions, radii, ray_shape)
+    return new_t_vals, (means, convs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
