@@ -3,6 +3,52 @@ from einops import rearrange
 import numpy as np
 from datasets.datasets import Rays_keys, Rays
 
+def lift_gaussian(directions, t_mean, t_var, r_var, diagonal):
+
+    mean = torch.unsqueeze(directions, dim = -2) * torch.unsqueeze(t_mean, dim = -1)
+    d_norm_denominator = torch.sum(directions ** 2, dim = -1, keepdim = True) + 1e-10
+    if diagonal:
+        d_outer_diag = directions ** 2  # eq (16)
+        null_outer_diag = 1 - d_outer_diag / d_norm_denominator
+        t_cov_diag = torch.unsqueeze(t_var, dim=-1) * torch.unsqueeze(d_outer_diag,
+                                                                      dim=-2)  # [B, N, 1] * [B, 1, 3] = [B, N, 3]
+        xy_cov_diag = torch.unsqueeze(r_var, dim=-1) * torch.unsqueeze(null_outer_diag, dim=-2)
+        cov_diag = t_cov_diag + xy_cov_diag
+        return mean, cov_diag
+    else:
+        d_outer = torch.unsqueeze(directions, dim=-1) * torch.unsqueeze(directions,
+                                                                        dim=-2)  # [B, 3, 1] * [B, 1, 3] = [B, 3, 3]
+        eye = torch.eye(directions.shape[-1], device=directions.device)  # [B, 3, 3]
+        # [B, 3, 1] * ([B, 3] / [B, 1])[..., None, :] = [B, 3, 3]
+        null_outer = eye - torch.unsqueeze(directions, dim=-1) * (directions / d_norm_denominator).unsqueeze(-2)
+        t_cov = t_var.unsqueeze(-1).unsqueeze(-1) * d_outer.unsqueeze(-3)  # [B, N, 1, 1] * [B, 1, 3, 3] = [B, N, 3, 3]
+        xy_cov = t_var.unsqueeze(-1).unsqueeze(-1) * null_outer.unsqueeze(
+            -3)  # [B, N, 1, 1] * [B, 1, 3, 3] = [B, N, 3, 3]
+        cov = t_cov + xy_cov
+        return mean, cov
+
+
+
+
+def cast_frustum_to_gaussian(directions, t0, t1, base_radius, diagonal, stable = True):
+    ###按论文中的公式（7）
+    if stable:
+        mu = (t0+t1)/2
+        hw = (t1-t0)/2
+        t_mean = mu + (2 * mu * hw ** 2) / (3 * mu ** 2 + hw ** 2)
+        t_var = (hw ** 2) / 3 - (4 / 15) * ((hw ** 4 * (12 * mu ** 2 - hw ** 2)) /
+                                            (3 * mu ** 2 + hw ** 2) ** 2)
+        r_var = base_radius ** 2 * ((mu ** 2) / 4 + (5 / 12) * hw ** 2 - 4 / 15 *
+                                    (hw ** 4) / (3 * mu ** 2 + hw ** 2))
+    else:
+        t_mean = (3 * (t1 ** 4 - t0 ** 4)) / (4 * (t1 ** 3 - t0 ** 3))
+        r_var = base_radius ** 2 * (3 / 20 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3))
+        t_mosq = 3 / 5 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3)
+        t_var = t_mosq - t_mean ** 2
+
+    return lift_gaussian(directions, t_mean, t_var, r_var, diagonal)
+
+
 
 def cast_rays(t_samples, origins, directions, radii, ray_shape, diagonal = True):
 
